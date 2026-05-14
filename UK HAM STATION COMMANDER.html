@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UK Amateur Radio Master Station v0.1</title>
+    <style>
+        :root { 
+            --uk-blue: #00247d; --uk-red: #cf142b; 
+            --slate-950: #020617; --slate-900: #0f172a; --slate-800: #1e293b; --slate-400: #94a3b8;
+            --indigo: #6366f1; --emerald: #10b981; --amber: #f59e0b;
+        }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--slate-950); color: #f8fafc; margin: 0; padding: 10px; font-size: 13px; line-height: 1.4; }
+        .header { text-align: center; padding: 15px; border-bottom: 1px solid var(--slate-800); margin-bottom: 15px; background: linear-gradient(to right, #00247d33, #cf142b33); border-radius: 10px; }
+        .header h1 { margin: 0; font-size: 1.5rem; letter-spacing: 2px; }
+
+        .dashboard { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+        .card { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(10px); padding: 15px; border-radius: 12px; border: 1px solid var(--slate-800); border-top: 3px solid var(--indigo); }
+        h3 { margin-top: 0; font-size: 0.7rem; color: var(--indigo); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid #334155; padding-bottom: 6px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        
+        /* Layout Fixes */
+        .eng-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; }
+        label { display: block; font-size: 0.6rem; color: var(--slate-400); font-weight: 700; margin-bottom: 4px; text-transform: uppercase; }
+        select, input { width: 100%; padding: 8px; background: #000; border: 1px solid var(--slate-800); border-radius: 6px; color: white; font-size: 0.85rem; outline: none; margin-bottom: 10px; }
+        
+        .res-box { background: #000; padding: 10px; border-radius: 6px; border-left: 3px solid var(--indigo); margin-top: 5px; }
+        .big-val { font-size: 1.3rem; font-weight: 800; color: #fff; }
+        .unit { font-size: 0.65rem; color: var(--slate-400); margin-left: 4px; }
+
+        /* Tables & Refs */
+        .table-scroll { max-height: 250px; overflow-y: auto; border-radius: 6px; border: 1px solid #1e293b; background: #00000044; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.7rem; }
+        th { text-align: left; background: var(--slate-800); padding: 8px; position: sticky; top: 0; color: var(--slate-400); }
+        td { padding: 6px 8px; border-bottom: 1px solid #1e293b; }
+        .badge { padding: 2px 5px; border-radius: 4px; font-size: 0.6rem; font-weight: bold; }
+        .all { background: var(--emerald); color: #000; }
+        .full { background: var(--amber); color: #000; }
+
+        /* Logbook */
+        #logEntries { height: 180px; overflow-y: auto; font-family: 'Consolas', monospace; background: #000; padding: 10px; border-radius: 6px; border: 1px solid #334155; margin-top: 10px; color: var(--emerald); }
+        .btn-main { width: 100%; padding: 10px; background: var(--indigo); border: none; color: white; border-radius: 6px; cursor: pointer; font-weight: bold; margin-top: 5px; }
+        .btn-export { background: var(--emerald); margin-top: 10px; }
+        
+        canvas { width: 100%; height: 80px; background: #000; border-radius: 6px; border: 1px solid #1e293b; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>UK HAM STATION COMMANDER <span style="color:var(--uk-red)">v0.1</span></h1>
+</div>
+
+<div class="dashboard">
+    
+    <!-- 1. IMPROVED ENGINEERING -->
+    <div class="card" style="grid-column: span 1;">
+        <h3>📡 Antenna & Transformer Lab</h3>
+        <div class="eng-grid">
+            <div>
+                <label>Antenna Type</label>
+                <select id="antType" onchange="run()">
+                    <option value="dipole">1/2λ Dipole</option>
+                    <option value="efhw">EFHW (End-Fed)</option>
+                    <option value="delta">Delta Loop</option>
+                    <option value="vertical">1/4λ Vertical</option>
+                </select>
+                <label>Freq (MHz)</label>
+                <input type="number" id="freq" value="14.175" step="0.01" oninput="run()">
+                <div class="res-box">
+                    <span class="big-val" id="antRes">0.00</span><span class="unit">metres</span>
+                </div>
+            </div>
+            <div>
+                <label>Matching Ratio</label>
+                <select id="ratio" onchange="run()">
+                    <option value="49">49:1 (EFHW)</option>
+                    <option value="64">64:1 (EFHW)</option>
+                    <option value="9">9:1 (Longwire)</option>
+                    <option value="4">4:1 (Loop/OFC)</option>
+                    <option value="1">1:1 (Dipole)</option>
+                </select>
+                <label>Primary Turns: 2</label>
+                <div class="res-box" style="border-left-color: var(--amber);">
+                    <label style="margin:0; color:var(--amber)">Secondary Turns</label>
+                    <span class="big-val" id="secTurns">0</span>
+                </div>
+            </div>
+        </div>
+        <canvas id="viz" width="300" height="80"></canvas>
+    </div>
+
+    <!-- 2. EXPANDED QUICK REFS -->
+    <div class="card">
+        <h3>❓ Operating References</h3>
+        <div class="table-scroll">
+            <table>
+                <tr><th colspan="2">Morse & Q-Codes</th><th colspan="2">UK Regions (2nd Letter)</th></tr>
+                <tr><td><strong>QRL</strong></td><td>Freq Busy?</td><td><strong>(none)</strong></td><td>England</td></tr>
+                <tr><td><strong>QRM</strong></td><td>Man-made Int.</td><td><strong>M/S</strong></td><td>Scotland</td></tr>
+                <tr><td><strong>QRN</strong></td><td>Atmospheric</td><td><strong>W</strong></td><td>Wales</td></tr>
+                <tr><td><strong>QTH</strong></td><td>Location</td><td><strong>I</strong></td><td>N. Ireland</td></tr>
+                <tr><td><strong>QRZ</strong></td><td>Who calls?</td><td><strong>D</strong></td><td>Isle of Man</td></tr>
+                <tr><td><strong>QSL</strong></td><td>Confirmed</td><td><strong>U/J</strong></td><td>Guernsey/Jersey</td></tr>
+            </table>
+        </div>
+        <div style="margin-top:10px; font-size:0.65rem; padding:8px; background:#000; border-radius:6px; color:var(--slate-400)">
+            <strong style="color:var(--indigo)">NATO:</strong> Alfa, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliett, Kilo, Lima, Mike, November, Oscar, Papa, Quebec, Romeo, Sierra, Tango, Uniform, Victor, Whiskey, X-ray, Yankee, Zulu.
+        </div>
+    </div>
+
+    <!-- 3. LOGBOOK & ADIF -->
+    <div class="card">
+        <h3>📓 Station Log (UTC)</h3>
+        <div style="display:grid; grid-template-columns: 2fr 1fr; gap:5px; margin-bottom:5px;">
+            <input type="text" id="logCall" placeholder="Callsign">
+            <input type="text" id="logRst" placeholder="RST">
+        </div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:5px;">
+            <input type="text" id="logBand" placeholder="Band (e.g. 40m)">
+            <input type="text" id="logMode" placeholder="Mode (e.g. SSB)">
+        </div>
+        <button onclick="addLog()" class="btn-main">LOG CONTACT</button>
+        <div id="logEntries"></div>
+        <button onclick="exportADIF()" class="btn-main btn-export">💾 DOWNLOAD ADIF FOR QRZ/LOTW</button>
+    </div>
+
+    <!-- 4. BAND PLAN & OFCOM LIMITS -->
+    <div class="card">
+        <h3>📜 UK Band Plan (Ofcom FAT)</h3>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Band</th><th>Frequency</th><th>Access</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>160m</td><td>1.810 - 2.000 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>80m</td><td>3.500 - 3.800 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>60m</td><td>5.258 - 5.406 MHz</td><td><span class="badge full">FULL</span></td></tr>
+                        <tr><td>40m</td><td>7.000 - 7.200 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>30m</td><td>10.100 - 10.150 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>20m</td><td>14.000 - 14.350 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>17m</td><td>18.068 - 18.168 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>15m</td><td>21.000 - 21.450 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>12m</td><td>24.890 - 24.990 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>10m</td><td>28.000 - 29.700 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>6m</td><td>50.000 - 52.000 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>4m</td><td>70.000 - 70.500 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>2m</td><td>144.000 - 146.000 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                        <tr><td>70cm</td><td>430.000 - 440.000 MHz</td><td><span class="badge all">ALL</span></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+        <div style="display:grid; grid-template-columns: 1fr 1.5fr; gap:10px; margin-top:10px;">
+            <div class="res-box" style="border-left-color: var(--uk-red); padding:5px;">
+                <label>Safety Dist.</label>
+                <span id="safeD" style="font-weight:bold;">0.00</span>m
+            </div>
+            <div style="font-size:0.9rem; color:var(--slate-400)">
+                <strong>Foundation:</strong> 25W<br>
+                <strong>Intermediate:</strong> 100W<br>
+                <strong>Full:</strong> 1000W (Secondary)
+            </div>
+        </div>
+        <input type="number" id="pwr" value="10" placeholder="Watts" oninput="run()" style="margin-top:10px;">
+    </div>
+</div>
+
+<script>
+    function run() {
+        const f = parseFloat(document.getElementById('freq').value);
+        const type = document.getElementById('antType').value;
+        const ratio = parseFloat(document.getElementById('ratio').value);
+        const pwr = parseFloat(document.getElementById('pwr').value) || 0;
+        
+        if(!f) return;
+
+        // Formulae
+        let l = (142.5 / f);
+        if(type === 'delta') l = 306/f;
+        if(type === 'vertical') l = 71.25/f;
+        
+        document.getElementById('antRes').innerText = l.toFixed(2);
+        document.getElementById('secTurns').innerText = Math.round(2 * Math.sqrt(ratio));
+        document.getElementById('safeD').innerText = (0.13 * Math.sqrt(pwr * 1.6)).toFixed(2);
+        
+        const ctx = document.getElementById('viz').getContext('2d');
+        ctx.clearRect(0,0,300,80); ctx.strokeStyle = '#6366f1'; ctx.lineWidth = 3; ctx.beginPath();
+        if(type==='dipole') { ctx.moveTo(50,40); ctx.lineTo(145,40); ctx.moveTo(155,40); ctx.lineTo(250,40); }
+        else if(type==='delta') { ctx.moveTo(150,10); ctx.lineTo(100,70); ctx.lineTo(200,70); ctx.closePath(); }
+        else if(type==='vertical') { ctx.moveTo(150,10); ctx.lineTo(150,70); ctx.moveTo(150,70); ctx.lineTo(110,75); ctx.moveTo(150,70); ctx.lineTo(190,75); }
+        else { ctx.moveTo(50,40); ctx.lineTo(250,40); ctx.fillStyle="#cf142b"; ctx.fillRect(40,35,10,10); }
+        ctx.stroke();
+    }
+
+    function addLog() {
+        const call = document.getElementById('logCall').value.toUpperCase();
+        const rst = document.getElementById('logRst').value || "59";
+        const band = document.getElementById('logBand').value || "20m";
+        const mode = document.getElementById('logMode').value.toUpperCase() || "SSB";
+        if(!call) return;
+        
+        const now = new Date();
+        const d = now.toISOString().split('T')[0].replace(/-/g, '');
+        const t = now.getUTCHours().toString().padStart(2,'0') + now.getUTCMinutes().toString().padStart(2,'0');
+
+        const entry = { call, rst, band, mode, date: d, time: t };
+        let logs = JSON.parse(localStorage.getItem('hamLogs_v8') || "[]");
+        logs.unshift(entry);
+        localStorage.setItem('hamLogs_v8', JSON.stringify(logs));
+        renderLogs();
+        document.getElementById('logCall').value = '';
+    }
+
+    function renderLogs() {
+        const logs = JSON.parse(localStorage.getItem('hamLogs_v8') || "[]");
+        document.getElementById('logEntries').innerHTML = logs.map(l => 
+            `<div style="border-bottom:1px solid #111; padding:3px 0; display:flex; justify-content:space-between">
+                <span><b>${l.call}</b></span> <span>${l.band} ${l.mode}</span> <span>${l.rst}</span>
+            </div>`
+        ).join('');
+    }
+
+    function exportADIF() {
+        const logs = JSON.parse(localStorage.getItem('hamLogs_v8') || "[]");
+        if(!logs.length) return alert("Log is empty");
+        let a = "ADIF Export\n<ADIF_VER:5>3.1.1\n<EOH>\n";
+        logs.forEach(l => {
+            a += `<CALL:${l.call.length}>${l.call}<BAND:${l.band.length}>${l.band}<MODE:${l.mode.length}>${l.mode}<QSO_DATE:${l.date.length}>${l.date}<TIME_ON:${l.time.length}>${l.time}<RST_SENT:${l.rst.length}>${l.rst}<EOR>\n`;
+        });
+        const blob = new Blob([a], {type: 'text/plain'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = `UK_Log_${new Date().toISOString().slice(0,10)}.adi`;
+        link.click();
+    }
+
+    window.onload = () => { run(); renderLogs(); };
+</script>
+</body>
+</html>
